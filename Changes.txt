@@ -1,5 +1,12 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.03  Tue Sep 14 13:39:00 2004
+	- A new option has been added to the constructor: fiddle_timestamp.
+		The default value of the option is 1, so the module behaves as it did before.
+		If you call new(fiddle_timestamp => 0), we skip the documented process of fiddling
+		values of type timestamp during a call to restore(), so that the data being restored
+		is inserted as-is. This option was requested by Daniel Santamaria.
+
 1.02  Thu Aug 26 12:57:00 2004
 	- A new parameter has been added to the constructor: skip_tables.
 		If new is called as new(skip_tables => ['some_table_name']), the restore phase

@@ -52,7 +52,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 my(%_decode_xml) =
 (
@@ -81,10 +81,11 @@ my(%_encode_xml) =
 {
 	my(%_attr_data) =
 	(
-		_clean			=> 0,
-		_dbh			=> '',
-		_skip_tables	=> [],
-		_verbose		=> 0,
+		_clean				=> 0,
+		_dbh				=> '',
+		_fiddle_timestamp	=> 1,
+		_skip_tables		=> [],
+		_verbose			=> 0,
 	);
 
 	sub _default_for
@@ -250,7 +251,7 @@ sub restore
 			{
 				($key, $value) = ($1, $self -> decode_xml($2) ) if ($line =~ m|^\s*<(.+?)>(.*?)</\1>|);
 
-				if ($key =~ /timestamp/)
+				if ($$self{'_fiddle_timestamp'} && ($key =~ /timestamp/) )
 				{
 					$value = '19700101' if ($value =~ /^0000/);
 					$value = substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2) . ' 00:00:00';
@@ -352,7 +353,7 @@ Usage: DBIx::Admin::BackupRestore -> new().
 
 This method takes a set of parameters. Only the dbh parameter is mandatory.
 
-For each parameter you wish to use, call new as C<new(param_1 => value_1, ...)>.
+For each parameter you wish to use, call new as C<new(param_1 =&gt; value_1, ...)>.
 
 =over 4
 
@@ -360,7 +361,7 @@ For each parameter you wish to use, call new as C<new(param_1 => value_1, ...)>.
 
 The default value is 0.
 
-If new is called as C<new(clean => 1)>, the backup phase deletes any characters outside the
+If new is called as C<new(clean =&gt; 1)>, the backup phase deletes any characters outside the
 range 20 .. 7E (hex).
 
 The restore phase ignores this parameter.
@@ -373,11 +374,31 @@ This is a database handle.
 
 This parameter is mandatory.
 
+=item fiddle_timestamp
+
+The default value is 1.
+
+If the value of this parameter is 0, then C<restore()> does not fiddle the value of fields of
+type timestamp.
+
+If the value of the parameter is 1, then C<restore()> fiddles the value of fields of type
+timestamp in this manner:
+
+=over 4
+
+=item Data matching /^0000/ is converted to 19700101
+
+=item Data is converted to the format YYYY-MM-DD 00:00:00
+
+=back
+
+This parameter is optional.
+
 =item skip_tables
 
 The default value is [].
 
-If new is called as C<new(skip_tables => ['some_table_name'])>, the restore phase
+If new is called as C<new(skip_tables =&gt; ['some_table_name'])>, the restore phase
 does not restore the tables named in the call to C<new()>.
 
 This option is designed to work with CGI scripts using the module CGI::Sessions.
@@ -391,7 +412,7 @@ This parameter is optional.
 
 The default value is 0.
 
-If new is called as C<new(verbose => 1)>, the backup and restore phases both print the names
+If new is called as C<new(verbose =&gt; 1)>, the backup and restore phases both print the names
 of the tables to STDERR.
 
 When beginning to use this module, you are strongly encouraged to use the verbose option
@@ -414,19 +435,6 @@ The database name is passed in here to help decorate the XML.
 Returns an array ref of imported table names. They are sorted by name.
 
 Opens and reads the given file, presumably one output by a previous call to backup().
-
-If the incoming data is going in to a column of type timestamp, then the data is fiddled
-in the following manner:
-
-=over 4
-
-=item Data matching /^0000/ is converted to 19700101
-
-=item Data is converted to the format YYYY-MM-DD 00:00:00
-
-=back
-
-This transformation could easily be make optional. Just ask!
 
 =head1 Example code
 
