@@ -52,7 +52,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 my(%_decode_xml) =
 (
@@ -81,9 +81,10 @@ my(%_encode_xml) =
 {
 	my(%_attr_data) =
 	(
-		_clean		=> 0,
-		_dbh		=> '',
-		_verbose	=> 0,
+		_clean			=> 0,
+		_dbh			=> '',
+		_skip_tables	=> [],
+		_verbose		=> 0,
 	);
 
 	sub _default_for
@@ -207,7 +208,8 @@ sub new
 
 	$self -> tables();
 
-	$$self{'_xml'} = '';
+	$$self{'_skip'}{@{$$self{'_skip_tables'} } }	= (1) x @{$$self{'_skip_tables'} };
+	$$self{'_xml'}									= '';
 
 	return $self;
 
@@ -230,12 +232,14 @@ sub restore
 
 		if ($line =~ /<RESULTSET.+from\s+(.+)">/)
 		{
-			$table_name	= $self -> decode_xml($1);
-			$sql		= ''; # See </RESULTSET> code.
+			$table_name = $self -> decode_xml($1);
 
-			push(@{$$self{'_restored_table'} }, $table_name);
+			if (! $$self{'_skip'}{$table_name})
+			{
+				push @{$$self{'_restored_table'} }, $table_name;
 
-		print STDERR "Restore table: $table_name. \n" if ($$self{'_verbose'});
+				print STDERR "Restore table: $table_name. \n" if ($$self{'_verbose'});
+			}
 		}
 		elsif ($line =~ /<ROW>/)
 		{
@@ -256,20 +260,17 @@ sub restore
 				push(@value, $value);
 			}
 
-			# Note: This comment is left over from when the 2 pushes above
-			# used to check for non-null data before pushing.
-			# This cannot be 'optimised' with if (! $sql) then prepare, since there
-			# may be a different number of fields from one row to the next.
-			# Remember, only non-null fields are output.
+			# There may be a different number of fields from one row to the next.
+			# Remember, only non-null fields are output by sub backup().
 
-			$sql = "insert into $table_name (" . join(', ', @key) . ') values (' . join(', ', ('?') x @key) . ')';
-			$sth = $$self{'_dbh'} -> prepare($sql) || die("Can't prepare($sql): $DBI::errstr");
+			if (! $$self{'_skip'}{$table_name})
+			{
+				$sql = "insert into $table_name (" . join(', ', @key) . ') values (' . join(', ', ('?') x @key) . ')';
+				$sth = $$self{'_dbh'} -> prepare($sql) || die("Can't prepare($sql): $DBI::errstr");
 
-			$sth -> execute(@value) || die("Can't execute($sql): $DBI::errstr");
-		}
-		elsif ($line =~ m|</RESULTSET>|)
-		{
-			$sth -> finish() if ($sql);
+				$sth -> execute(@value) || die("Can't execute($sql): $DBI::errstr");
+				$sth -> finish();
+			}
 		}
 	}
 
@@ -319,12 +320,15 @@ C<DBIx::Admin::BackupRestore> is a pure Perl module.
 
 It exports all data in all tables from one database to an XML file.
 
-Then that file can be imported into another database, possibly under a different database server.
+Then that file can be imported into another database, possibly under a different database
+server.
 
-Warning: It is designed on the assumption you have a stand-alone script which creates an appropriate set of empty tables
-on the destination database server. You run that script, and then run this module in 'restore' mode.
+Warning: It is designed on the assumption you have a stand-alone script which creates an
+appropriate set of empty tables on the destination database server. You run that script,
+and then run this module in 'restore' mode.
 
-This module is used almost daily to transfer a MySQL database under MS Windows to a Postgres database under Linux.
+This module is used almost daily to transfer a MySQL database under MS Windows to a Postgres
+database under Linux.
 
 Similar modules are discussed below.
 
@@ -348,7 +352,7 @@ Usage: DBIx::Admin::BackupRestore -> new().
 
 This method takes a set of parameters. Only the dbh parameter is mandatory.
 
-For each parameter you wish to use, call new as new(param_1 => value_1, ...).
+For each parameter you wish to use, call new as C<new(param_1 => value_1, ...)>.
 
 =over 4
 
@@ -356,7 +360,8 @@ For each parameter you wish to use, call new as new(param_1 => value_1, ...).
 
 The default value is 0.
 
-If new is called as new(clean => 1), the backup phase deletes any characters outside the range 20 .. 7E (hex).
+If new is called as C<new(clean => 1)>, the backup phase deletes any characters outside the
+range 20 .. 7E (hex).
 
 The restore phase ignores this parameter.
 
@@ -368,13 +373,29 @@ This is a database handle.
 
 This parameter is mandatory.
 
+=item skip_tables
+
+The default value is [].
+
+If new is called as C<new(skip_tables => ['some_table_name'])>, the restore phase
+does not restore the tables named in the call to C<new()>.
+
+This option is designed to work with CGI scripts using the module CGI::Sessions.
+
+Now, the CGI script can run with the current CGI::Session data, and stale CGI::Session
+data is not restored from the XML file.
+
+This parameter is optional.
+
 =item verbose
 
 The default value is 0.
 
-If new is called as new(verbose => 1), the backup and restore phases both print the names of the tables to STDERR.
+If new is called as C<new(verbose => 1)>, the backup and restore phases both print the names
+of the tables to STDERR.
 
-When beginning to use this module, you are strongly encouraged to use the verbose option as a progress monitor.
+When beginning to use this module, you are strongly encouraged to use the verbose option
+as a progress monitor.
 
 This parameter is optional.
 
@@ -394,7 +415,8 @@ Returns an array ref of imported table names. They are sorted by name.
 
 Opens and reads the given file, presumably one output by a previous call to backup().
 
-If the incoming data is going in to a column of type timestamp, then the data is fiddled in the following manner:
+If the incoming data is going in to a column of type timestamp, then the data is fiddled
+in the following manner:
 
 =over 4
 
@@ -436,9 +458,11 @@ On CPAN I can see 4 modules which obviously offer similar features - there may b
 
 =back
 
-Of these, DBIx::XML_RDB is the only one I have experimented with. My thanks to Matt Sergeant for that module.
+Of these, DBIx::XML_RDB is the only one I have experimented with. My thanks to Matt Sergeant
+for that module.
 
-I have effectively extended his module to automatically handle all tables, and to handle importing too.
+I have effectively extended his module to automatically handle all tables, and to handle
+importing too.
 
 =head1 Required Modules
 
@@ -450,7 +474,8 @@ See Changes.txt.
 
 =head1 Author
 
-C<DBIx::Admin::BackupRestore> was written by Ron Savage I<E<lt>ron@savage.net.auE<gt>> in 2004.
+C<DBIx::Admin::BackupRestore> was written by Ron Savage I<E<lt>ron@savage.net.auE<gt>>
+in 2004.
 
 Home page: http://savage.net.au/index.html
 

@@ -7,26 +7,25 @@ WriteMakefile
 (
 	($] ge '5.005') ?
 	(
-		'AUTHOR'	=> 'Ron Savage (ron@savage.net.au)',
-		'ABSTRACT'	=> 'Back-up all tables in a db to XML, and restore them',
+		'AUTHOR' => 'Ron Savage (ron@savage.net.au)',
+		'ABSTRACT' => 'Back-up all tables in a db to XML, and restore them',
     ) : (),
-	clean			=>
+	clean				=>
 	{
-		FILES		=> 'blib/* Makefile MANIFEST DBIx-Admin-BackupRestore-*'
+		FILES			=> 'blib/* Makefile MANIFEST DBIx-Admin-BackupRestore-*'
 	},
-	dist			=>
+	dist				=>
 	{
-		COMPRESS	=> 'gzip',
-		SUFFIX		=> 'gz'
+		COMPRESS		=> 'gzip',
+		SUFFIX			=> 'gz'
 	},
-	DISTNAME		=> 'DBIx-Admin-BackupRestore',
-	NAME			=> 'DBIx::Admin::BackupRestore',
-	PL_FILES		=> {},
-	PREREQ_PM		=>
+	DISTNAME			=> 'DBIx-Admin-BackupRestore',
+	NAME				=> 'DBIx::Admin::BackupRestore',
+	PL_FILES			=> {},
+	PREREQ_PM			=>
 	{
-		Carp		=> 0,
-		Test::More	=> 0,
-		Test::Pod	=> 0,
+		Carp			=> 0,
+		Test::More		=> 0,
 	},
-	VERSION_FROM	=> 'lib/DBIx/Admin/BackupRestore.pm',
+	VERSION_FROM		=> 'lib/DBIx/Admin/BackupRestore.pm',
 );

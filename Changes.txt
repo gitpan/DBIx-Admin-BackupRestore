@@ -1,8 +1,16 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.02  Thu Aug 26 12:57:00 2004
+	- A new parameter has been added to the constructor: skip_tables.
+		If new is called as new(skip_tables => ['some_table_name']), the restore phase
+		does not restore the tables named in the call to new().
+		This option is designed to work with CGI scripts using the module CGI::Sessions.
+		Now, the CGI script can run with the current CGI::Session data, and stale
+		CGI::Session data is not restored from the XML file.
+		This parameter is optional. It defaults to [].
+
 1.01  Mon Jul 19 14:43:00 2004
 	- Change Makefile.PL to coexist with Module::Build
-	- Add t/pod.t to test all PODs
 
 1.00  Tue Jan 22 12:37:29 2004
 	- Original version

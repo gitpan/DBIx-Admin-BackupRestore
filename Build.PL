@@ -8,7 +8,6 @@ Module::Build -> new
 	build_requires	=>
 	{
 		Test::More	=> 0,
-		Test::Pod	=> 0,
 	},
 	requires		=>
 	{
