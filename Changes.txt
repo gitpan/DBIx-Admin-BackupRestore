@@ -1,0 +1,4 @@
+Revision history for Perl extension DBIx::Admin::BackupRestore.
+
+1.00  Tue Jan 22 12:37:29 2004
+	- Original version

@@ -1,0 +1,146 @@
+NAME
+    "DBIx::Admin::BackupRestore" - Back-up all tables in a db to XML, and
+    restore them
+
+Synopsis
+            use DBIx::Admin::BackupRestore;
+
+            # Backup.
+
+            open(OUT, "> $file_name") || die("Can't open(> $file_name): $!");
+            print OUT DBIx::Admin::BackupRestore -> new(dbh => $dbh) -> backup('db_name');
+            close OUT;
+
+            # Restore.
+
+            DBIx::Admin::BackupRestore -> new(dbh => $dbh) -> restore($file_name);
+
+Description
+    "DBIx::Admin::BackupRestore" is a pure Perl module.
+
+    It exports all data in all tables from one database to an XML file.
+
+    Then that file can be imported into another database, possibly under a
+    different database server.
+
+    Warning: It is designed on the assumption you have a stand-alone script
+    which creates an appropriate set of empty tables on the destination
+    database server. You run that script, and then run this module in
+    'restore' mode.
+
+    This module is used almost daily to transfer a MySQL database under MS
+    Windows to a Postgres database under Linux.
+
+    Similar modules are discussed below.
+
+Distributions
+    This module is available both as a Unix-style distro (*.tgz) and an
+    ActiveState-style distro (*.ppd). The latter is shipped in a *.zip file.
+
+    See http://savage.net.au/Perl-modules.html for details.
+
+    See http://savage.net.au/Perl-modules/html/installing-a-module.html for
+    help on unpacking and installing each type of distro.
+
+Constructor and initialization
+    new(...) returns a "DBIx::Admin::BackupRestore" object.
+
+    This is the class's contructor.
+
+    Usage: DBIx::Admin::BackupRestore -> new().
+
+    This method takes a set of parameters. Only the dbh parameter is
+    mandatory.
+
+    For each parameter you wish to use, call new as new(param_1 => value_1,
+    ...).
+
+    clean
+        The default value is 0.
+
+        If new is called as new(clean => 1), the backup phase deletes any
+        characters outside the range 20 .. 7E (hex).
+
+        The restore phase ignores this parameter.
+
+        This parameter is optional.
+
+    dbh This is a database handle.
+
+        This parameter is mandatory.
+
+    verbose
+        The default value is 0.
+
+        If new is called as new(verbose => 1), the backup and restore phases
+        both print the names of the tables to STDERR.
+
+        When beginning to use this module, you are strongly encouraged to
+        use the verbose option as a progress monitor.
+
+        This parameter is optional.
+
+Method: backup($database_name)
+    Returns a potentially-huge string of XML.
+
+    You would normally write this straight to disk.
+
+    The database name is passed in here to help decorate the XML.
+
+Method: restore($file_name)
+    Returns an array ref of imported table names. They are sorted by name.
+
+    Opens and reads the given file, presumably one output by a previous call
+    to backup().
+
+    If the incoming data is going in to a column of type timestamp, then the
+    data is fiddled in the following manner:
+
+    Data matching /^0000/ is converted to 19700101
+    Data is converted to the format YYYY-MM-DD 00:00:00
+
+    This transformation could easily be make optional. Just ask!
+
+Example code
+    See the examples/ directory in the distro.
+
+    There are 2 demo programs:
+
+    backup-db.pl
+    restore-db.pl
+
+Related Modules
+    On CPAN I can see 4 modules which obviously offer similar features -
+    there may be others.
+
+    DBIx::Copy
+    DBIx::Dump
+    DBIx::Migrate
+    DBIx::XML_RDB
+
+    Of these, DBIx::XML_RDB is the only one I have experimented with. My
+    thanks to Matt Sergeant for that module.
+
+    I have effectively extended his module to automatically handle all
+    tables, and to handle importing too.
+
+Required Modules
+    Carp.
+
+Changes
+    See Changes.txt.
+
+Author
+    "DBIx::Admin::BackupRestore" was written by Ron Savage
+    *<ron@savage.net.au>* in 2004.
+
+    Home page: http://savage.net.au/index.html
+
+Copyright
+    Australian copyright (c) 2004, Ron Savage. All rights reserved.
+
+            All Programs of mine are 'OSI Certified Open Source Software';
+            you can redistribute them and/or modify them under the terms of
+            The Artistic License, a copy of which is available at:
+            http://www.opensource.org/licenses/index.html
+
