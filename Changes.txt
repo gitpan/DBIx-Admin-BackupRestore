@@ -1,4 +1,8 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.01  Mon Jul 19 14:43:00 2004
+	- Change Makefile.PL to coexist with Module::Build
+	- Add t/pod.t to test all PODs
+
 1.00  Tue Jan 22 12:37:29 2004
 	- Original version

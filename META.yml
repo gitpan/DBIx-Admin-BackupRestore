@@ -1,0 +1,15 @@
+--- #YAML:1.0
+name: DBIx-Admin-BackupRestore
+version: 1.01
+author:
+  - Ron Savage <ron@savage.net.au>
+abstract: |-
+  Back-up all tables in a db to XML, and restore them
+license: artistic
+requires:
+  Carp: 0
+build_requires:
+  Test::More: 0
+  Test::Pod: 0
+provides: {}
+generated_by: Module::Build version 0.24

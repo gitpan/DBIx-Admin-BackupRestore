@@ -1,9 +1,12 @@
-MANIFEST
-BackupRestore.pm
+Build.PL
 Changes.txt
-Makefile.PL
-BackupRestore.html
-README
-t/test.t
-examples/restore-db.pl
 examples/backup-db.pl
+examples/restore-db.pl
+lib/DBIx/Admin/BackupRestore.pm
+Makefile.PL
+MANIFEST			This list of files
+MANIFEST.SKIP
+META.yml
+README
+t/pod.t
+t/test.t
