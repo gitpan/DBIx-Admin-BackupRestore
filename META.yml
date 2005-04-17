@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name: DBIx-Admin-BackupRestore
-version: 1.03
+version: 1.05
 author:
   - Ron Savage <ron@savage.net.au>
 abstract: |-
@@ -10,5 +10,8 @@ requires:
   Carp: 0
 build_requires:
   Test::More: 0
-provides: {}
-generated_by: Module::Build version 0.24
+provides:
+  DBIx::Admin::BackupRestore:
+    file: lib/DBIx/Admin/BackupRestore.pm
+    version: 1.05
+generated_by: Module::Build version 0.2607

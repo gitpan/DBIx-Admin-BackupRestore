@@ -52,7 +52,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.03';
+our $VERSION = '1.05';
 
 my(%_decode_xml) =
 (
@@ -81,11 +81,13 @@ my(%_encode_xml) =
 {
 	my(%_attr_data) =
 	(
-		_clean				=> 0,
-		_dbh				=> '',
-		_fiddle_timestamp	=> 1,
-		_skip_tables		=> [],
-		_verbose			=> 0,
+		_clean					=> 0,
+		_dbh					=> '',
+		_fiddle_timestamp		=> 1,
+		_skip_schema			=> [],
+		_skip_tables			=> [],
+		_transform_tablenames	=> 0,
+		_verbose				=> 0,
 	);
 
 	sub _default_for
@@ -182,10 +184,8 @@ sub backup
 
 sub new
 {
-	my($caller, %arg)		= @_;
-	my($caller_is_obj)		= ref($caller);
-	my($class)				= $caller_is_obj || $caller;
-	my($self)				= bless({}, $class);
+	my($class, %arg)	= @_;
+	my($self)			= bless({}, $class);
 
 	for my $attr_name ($self -> _standard_keys() )
 	{
@@ -194,10 +194,6 @@ sub new
 		if (exists($arg{$arg_name}) )
 		{
 			$$self{$attr_name} = $arg{$arg_name};
-		}
-		elsif ($caller_is_obj)
-		{
-			$$self{$attr_name} = $$caller{$attr_name};
 		}
 		else
 		{
@@ -209,8 +205,9 @@ sub new
 
 	$self -> tables();
 
-	$$self{'_skip'}{@{$$self{'_skip_tables'} } }	= (1) x @{$$self{'_skip_tables'} };
-	$$self{'_xml'}									= '';
+	@{$$self{'_skip_schema_name'} }{@{$$self{'_skip_schema'} } }	= (1) x @{$$self{'_skip_schema'} };
+	@{$$self{'_skip_table_name'} }{@{$$self{'_skip_tables'} } }		= (1) x @{$$self{'_skip_tables'} };
+	$$self{'_xml'}													= '';
 
 	return $self;
 
@@ -225,7 +222,7 @@ sub restore
 
 	open(INX, $file_name) || die("Can't open($file_name): $!");
 
-	my($i, $line, $table_name, @key, @value, $key, $value, $sql, $sth);
+	my($i, $line, $table_name, $schema_name, @key, @value, $key, $value, $sql, $sth);
 
 	while ($line = <INX>)
 	{
@@ -235,7 +232,21 @@ sub restore
 		{
 			$table_name = $self -> decode_xml($1);
 
-			if (! $$self{'_skip'}{$table_name})
+			if ( ($$self{'_transform_tablenames'} == 1) && ($table_name =~ /^(.+?)\.(.+)$/) )
+			{
+				$schema_name	= $1;
+				$table_name		= $2;
+			}
+			else
+			{
+				$schema_name = '';
+			}
+
+			if ($$self{'_skip_schema_name'}{$schema_name} || $$self{'_skip_table_name'}{$table_name})
+			{
+				print STDERR "Skip table: $table_name. \n" if ($$self{'_verbose'});
+			}
+			else
 			{
 				push @{$$self{'_restored_table'} }, $table_name;
 
@@ -251,10 +262,17 @@ sub restore
 			{
 				($key, $value) = ($1, $self -> decode_xml($2) ) if ($line =~ m|^\s*<(.+?)>(.*?)</\1>|);
 
-				if ($$self{'_fiddle_timestamp'} && ($key =~ /timestamp/) )
+				if ($key =~ /timestamp/)
 				{
-					$value = '19700101' if ($value =~ /^0000/);
-					$value = substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2) . ' 00:00:00';
+					if ($$self{'_fiddle_timestamp'} == 1)
+					{
+						$value = '19700101' if ($value =~ /^0000/);
+						$value = substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2) . ' 00:00:00';
+					}
+					elsif ($$self{'_fiddle_timestamp'} == 2)
+					{
+						$value = '1970-01-01 00:00:00' if ($value =~ /^0000/);
+					}
 				}
 
 				push(@key, $key);
@@ -264,9 +282,13 @@ sub restore
 			# There may be a different number of fields from one row to the next.
 			# Remember, only non-null fields are output by sub backup().
 
-			if (! $$self{'_skip'}{$table_name})
+			if ($$self{'_skip_schema_name'}{$schema_name} || $$self{'_skip_table_name'}{$table_name})
+			{
+			}
+			else
 			{
 				$sql = "insert into $table_name (" . join(', ', @key) . ') values (' . join(', ', ('?') x @key) . ')';
+
 				$sth = $$self{'_dbh'} -> prepare($sql) || die("Can't prepare($sql): $DBI::errstr");
 
 				$sth -> execute(@value) || die("Can't execute($sql): $DBI::errstr");
@@ -328,7 +350,7 @@ Warning: It is designed on the assumption you have a stand-alone script which cr
 appropriate set of empty tables on the destination database server. You run that script,
 and then run this module in 'restore' mode.
 
-This module is used almost daily to transfer a MySQL database under MS Windows to a Postgres
+This module is used daily to transfer a MySQL database under MS Windows to a Postgres
 database under Linux.
 
 Similar modules are discussed below.
@@ -345,7 +367,7 @@ help on unpacking and installing each type of distro.
 
 =head1 Constructor and initialization
 
-new(...) returns a C<DBIx::Admin::BackupRestore> object.
+new(...) returns an object of type C<DBIx::Admin::BackupRestore>.
 
 This is the class's contructor.
 
@@ -353,7 +375,7 @@ Usage: DBIx::Admin::BackupRestore -> new().
 
 This method takes a set of parameters. Only the dbh parameter is mandatory.
 
-For each parameter you wish to use, call new as C<new(param_1 =&gt; value_1, ...)>.
+For each parameter you wish to use, call new as new(param_1 => value_1, ...).
 
 =over 4
 
@@ -361,7 +383,7 @@ For each parameter you wish to use, call new as C<new(param_1 =&gt; value_1, ...
 
 The default value is 0.
 
-If new is called as C<new(clean =&gt; 1)>, the backup phase deletes any characters outside the
+If new is called as new(clean => 1), the backup phase deletes any characters outside the
 range 20 .. 7E (hex).
 
 The restore phase ignores this parameter.
@@ -376,29 +398,59 @@ This parameter is mandatory.
 
 =item fiddle_timestamp
 
+This parameter takes one of these values: 0, 1 or 2.
+
 The default value is 1.
 
-If the value of this parameter is 0, then C<restore()> does not fiddle the value of fields of
-type timestamp.
+If the value of this parameter is 0, then C<restore()> does not fiddle the value of fields
+whose names match /timestamp/.
 
-If the value of the parameter is 1, then C<restore()> fiddles the value of fields of type
-timestamp in this manner:
+If the value of the parameter is 1, then C<restore()> fiddles the value of fields whose names
+match /timestamp/ in this manner:
 
-=over 4
+	All values are assumed to be of the form /^YYYYMMDD/ (fake reg exps are nice!).
+	Hours, minutes and seconds, if present, are ignored.
+	Timestamps undergo either 1 or 2 transformations.
+	Firstly, if the value matches /^0000/, convert it to 19700101.
+	Then, all values are converted to YYYY-MM-DD 00:00:00.
+	Eg: This - 00000000 - is converted to 1970-01-01 00:00:00
+	and today - 20050415 - is converted to 2005-04-15 00:00:00.
+	You would use this option when transferring data from MySQL's 'timestamp' type
+	to Postgres' 'timestamp' type, and MySQL output values match /^(\d{8})/.
 
-=item Data matching /^0000/ is converted to 19700101
+If the value of the parameter is 2, then C<restore()> fiddles the value of fields whose names
+match /timestamp/ in this manner:
 
-=item Data is converted to the format YYYY-MM-DD 00:00:00
-
-=back
+	Timestamps undergo either 0 or 1 transformations.
+	If the value matches /^0000/, hours, minutes and seconds, if present, are ignored.
+	If the value matches /^0000/, convert it to 1970-01-01 00:00:00.
+	Values not matching that pattern are not converted.
+	Eg: This - 0000-00-00 00:00:00 - is converted to 1970-01-01 00:00:00
+	and today - 2005-04-15 09:34:00 - is not converted.
+	You would use this option when transferring data from MySQL's 'timestamp' type
+	to Postgres' 'timestamp' type, and some MySQL output values match /0000-00-00 00:00:00/
+	and some values are real dates, such as 2005-04-15 09:34:00.
 
 This parameter is optional.
+
+=item skip_schema
+
+The default value is [].
+
+If new is called as new(skip_schema => ['some_schema_name']), the restore phase
+does not restore any tables in the named schema.
+
+Here, 'schema' is defined to be the prefix on a table name,
+and to be separated from the table name by a '.'.
+
+Note: You would normally use these options to port data from Postgres to MySQL:
+new(skip_schema => ['information_schema', 'pg_catalog'], transform_tablenames => 1).
 
 =item skip_tables
 
 The default value is [].
 
-If new is called as C<new(skip_tables =&gt; ['some_table_name'])>, the restore phase
+If new is called as new(skip_tables => ['some_table_name']), the restore phase
 does not restore the tables named in the call to C<new()>.
 
 This option is designed to work with CGI scripts using the module CGI::Sessions.
@@ -408,11 +460,29 @@ data is not restored from the XML file.
 
 This parameter is optional.
 
+=item transform_tablenames
+
+The default value is 0.
+
+The only other value currently recognized by this option is 1.
+
+Now, new(transform_tablenames => 1) chops the schema, up to and including the first '.',
+off table names. Thus a table exported from Postgres as 'public.service' can be
+renamed 'service' when being imported into another database, eg MySQL.
+
+Here, 'schema' is defined to be the prefix on a table name,
+and to be separated from the table name by a '.'.
+
+Note: You would normally use these options to port data from Postgres to MySQL:
+new(skip_schema => ['information_schema', 'pg_catalog'], transform_tablenames => 1).
+
+This parameter is optional.
+
 =item verbose
 
 The default value is 0.
 
-If new is called as C<new(verbose =&gt; 1)>, the backup and restore phases both print the names
+If new is called as new(verbose => 1), the backup and restore phases both print the names
 of the tables to STDERR.
 
 When beginning to use this module, you are strongly encouraged to use the verbose option

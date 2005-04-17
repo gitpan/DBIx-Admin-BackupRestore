@@ -1,20 +1,64 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.05  Fri Apr 15 09:34:00 2005
+	- Add another value to the range accepted by the option fiddle_timestamp.
+		This option is only used when restoring XML-based data to a database.
+		The default value is the same as V 1.04.
+		Values accepted by fiddle_timestamp:
+		0 => Do not fiddle timestamps
+		1 => Problem: All timestamps are unacceptable to the database. This is the default.
+			All values are assumed to be of the form /^YYYYMMDD/ (fake reg exps are nice!).
+			Hours, minutes and seconds, if present, are ignored.
+			Timestamps undergo either 1 or 2 transformations.
+			Firstly, if the value matches /^0000/, convert it to 19700101.
+			Then, all values are converted to YYYY-MM-DD 00:00:00.
+			Eg: This - 00000000 - is converted to 1970-01-01 00:00:00
+			and today - 20050415 - is converted to 2005-04-15 00:00:00.
+			You would use this option when transferring data from MySQL's 'timestamp' type
+			to Postgres' 'timestamp' type, and MySQL output values match /^(\d{8})/.
+		2 => Problem: Some timestamps are unacceptable to the database.
+			Timestamps undergo either 0 or 1 transformations.
+			If the value matches /^0000/, convert it to 1970-01-01 00:00:00.
+			Values not matching that pattern are not converted.
+			Eg: This - 0000-00-00 00:00:00 - is converted to 1970-01-01 00:00:00
+			and today - 2005-04-15 09:34:00 - is not converted.
+			You would use this option when transferring data from MySQL's 'timestamp' type
+			to Postgres' 'timestamp' type, and some MySQL output values match /0000-00-00 00:00:00/
+			and some values are real dates, such as 2005-04-15 09:34:00.
+	- Expand the docs referring to fiddle_timestamp
+
+1.04  Wed Mar  2 13:20:00 2005
+	- A new option has been added to the constructor: skip_schema.
+		Here, 'schema' is defined to be the prefix on a table name,
+		and to be separated from the table name by a '.'.
+		Eg: The backup phase, with Postgres as the input database, will output tables
+		with names like 'information_schema.sql_features' and 'pg_catalog.pg_aggregate'.
+		If new is called as new(skip_schema => ['some_schema_name']), the restore phase
+		does not restore any tables in the named schema.
+		This parameter is optional. It defaults to [], so the module behaves as it did before.
+	- A new option has been added to the constructor: transform_tablenames.
+		Now, new(transform_tablenames => 1) chops the schema, up to and including the first '.',
+		off table names. Thus a table exported from Postgres as 'public.service' can be
+		renamed 'service' when being imported into another database, eg MySQL.
+		Note: You would normally use these options to port data from Postgres to MySQL:
+		new(skip_schema => ['information_schema', 'pg_catalog'], transform_tablenames => 1).
+		This parameter is optional. The default value is 0, so the module behaves as it did before.
+
 1.03  Tue Sep 14 13:39:00 2004
 	- A new option has been added to the constructor: fiddle_timestamp.
-		The default value of the option is 1, so the module behaves as it did before.
 		If you call new(fiddle_timestamp => 0), we skip the documented process of fiddling
 		values of type timestamp during a call to restore(), so that the data being restored
 		is inserted as-is. This option was requested by Daniel Santamaria.
+		This parameter is optional. The default value 1, so the module behaves as it did before.
 
 1.02  Thu Aug 26 12:57:00 2004
-	- A new parameter has been added to the constructor: skip_tables.
+	- A new option has been added to the constructor: skip_tables.
 		If new is called as new(skip_tables => ['some_table_name']), the restore phase
 		does not restore the tables named in the call to new().
 		This option is designed to work with CGI scripts using the module CGI::Sessions.
 		Now, the CGI script can run with the current CGI::Session data, and stale
 		CGI::Session data is not restored from the XML file.
-		This parameter is optional. It defaults to [].
+		This parameter is optional. It defaults to [], so the module behaves as it did before.
 
 1.01  Mon Jul 19 14:43:00 2004
 	- Change Makefile.PL to coexist with Module::Build
