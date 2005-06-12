@@ -29,6 +29,8 @@ use strict;
 use warnings;
 
 use Carp;
+use File::Spec;
+use XML::Records;
 
 require 5.005_62;
 
@@ -52,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.05';
+our $VERSION = '1.06';
 
 my(%_decode_xml) =
 (
@@ -84,6 +86,7 @@ my(%_encode_xml) =
 		_clean					=> 0,
 		_dbh					=> '',
 		_fiddle_timestamp		=> 1,
+		_output_dir_name		=> '',
 		_skip_schema			=> [],
 		_skip_tables			=> [],
 		_transform_tablenames	=> 0,
@@ -134,27 +137,30 @@ sub encode_xml
 
 sub backup
 {
-	my($self, $database)	= @_;
-	$$self{'_xml'}			= qq|<?xml version = "1.0"?>\n|;
-	$$self{'_xml'}			.= qq|<DBI database = "|. $self -> encode_xml($database) . qq|">\n|;
+	my($self, $database) = @_;
+
+	Carp::croak('Missing parameter to new(): dbh') if (! $$self{'_dbh'});
+
+	$$self{'_xml'} = qq|<?xml version = "1.0"?>\n|;
+	$$self{'_xml'} .= qq|<dbi database = "|. $self -> encode_xml($database) . qq|">\n|;
 
 	my($table_name, $sql, $sth, $column_name, $data, $i, $field);
 
 	for $table_name (@{$$self{'_tables'} })
 	{
 		$sql			= "select * from $table_name";
-		$$self{'_xml'}	.= qq|\t<RESULTSET statement = "| . $self -> encode_xml($sql) . qq|">\n|;
-		$sth			= $$self{'_dbh'} -> prepare($sql) || die("Can't prepare($sql): $DBI::errstr");
+		$$self{'_xml'}	.= qq|\t<resultset statement = "| . $self -> encode_xml($sql) . qq|">\n|;
+		$sth			= $$self{'_dbh'} -> prepare($sql) || Carp::croak("Can't prepare($sql): $DBI::errstr");
 
 		print STDERR "Backup table: $table_name. \n" if ($$self{'_verbose'});
 
-		$sth -> execute() || die("Can't execute($sql): $DBI::errstr");
+		$sth -> execute() || Carp::croak("Can't execute($sql): $DBI::errstr");
 
 		$column_name = $$sth{'NAME'};
 
 		while ($data = $sth -> fetch() )
 		{
-			$$self{'_xml'}	.= "\t\t<ROW>\n";
+			$$self{'_xml'}	.= "\t\t<row>\n";
 			$i				= - 1;
 
 			for $field (@$data)
@@ -168,15 +174,15 @@ sub backup
 				}
 			}
 
-			$$self{'_xml'} .= "\t\t</ROW>\n";
+			$$self{'_xml'} .= "\t\t</row>\n";
 		}
 
-		die("Can't fetchrow_hashref($sql): $DBI::errstr") if ($DBI::errstr);
+		Carp::croak("Can't fetchrow_hashref($sql): $DBI::errstr") if ($DBI::errstr);
 
-		$$self{'_xml'} .= "\t</RESULTSET>\n";
+		$$self{'_xml'} .= "\t</resultset>\n";
 	}
 
-	$$self{'_xml'} .= "</DBI>\n";
+	$$self{'_xml'} .= "</dbi>\n";
 
 }	# End of backup.
 
@@ -201,12 +207,19 @@ sub new
 		}
 	}
 
-	die('You must call new as new(dbh => $dbh)') if (! $$self{'_dbh'});
+	$self -> tables() if ($$self{'_dbh'});
 
-	$self -> tables();
-
+	$$self{'_current_schema'}										= '';
+	$$self{'_current_table'}										= '';
+	$$self{'_database'}												= [];
+	$$self{'_key'}													= [];
+	$$self{'_output_is_open'}										= 0;
+	$$self{'_restored'}												= {};
+	$$self{'_skipped'}												= {};
+	$$self{'_skipping'}												= 0;
 	@{$$self{'_skip_schema_name'} }{@{$$self{'_skip_schema'} } }	= (1) x @{$$self{'_skip_schema'} };
 	@{$$self{'_skip_table_name'} }{@{$$self{'_skip_tables'} } }		= (1) x @{$$self{'_skip_tables'} };
+	$$self{'_value'}												= [];
 	$$self{'_xml'}													= '';
 
 	return $self;
@@ -215,93 +228,226 @@ sub new
 
 # -----------------------------------------------
 
+sub process_table
+{
+	my($self, $action, $table_name) = @_;
+	$$self{'_current_table'} = $self -> decode_xml($table_name);
+
+	if ( ($$self{'_transform_tablenames'} == 1) && ($$self{'_current_table'} =~ /^(.+?)\.(.+)$/) )
+	{
+		$$self{'_current_schema'}	= $1;
+		$$self{'_current_table'}	= $2;
+	}
+
+	if ($$self{'_skip_schema_name'}{$$self{'_current_schema'} } || $$self{'_skip_table_name'}{$$self{'_current_table'} })
+	{
+		# With restore_in_order we read the input file N times,
+		# but we don't want to _report_ the same table N times.
+		# Hence the hash $$self{'_skipped'}.
+
+		print STDERR "Skip table: $$self{'_current_table'}. \n" if ($$self{'_verbose'} && ! $$self{'_skipped'}{$$self{'_current_table'} });
+
+		$$self{'_skipping'}								= 1;
+		$$self{'_skipped'}{$$self{'_current_table'} }	= 1;
+	}
+	else
+	{
+		# With restore_in_order we read the input file N times,
+		# but we don't want to _report_ or _restore_ the same table N times.
+		# Hence the hash $$self{'_restored'}.
+
+		print STDERR "$action table: $$self{'_current_table'}. \n" if ($$self{'_verbose'} && ! $$self{'_restored'}{$$self{'_current_table'} });
+
+		$$self{'_skipping'}								= 0;
+		$$self{'_restored'}{$$self{'_current_table'} }	= 1;
+	}
+
+}	# End of process_table.
+
+# -----------------------------------------------
+
 sub restore
 {
-	my($self, $file_name)		= @_;
-	$$self{'_restored_table'}	= [];
+	my($self, $file_name) = @_;
 
-	open(INX, $file_name) || die("Can't open($file_name): $!");
+	Carp::croak('Missing parameter to new(): dbh') if (! $$self{'_dbh'});
 
-	my($i, $line, $table_name, $schema_name, @key, @value, $key, $value, $sql, $sth);
+	open(INX, $file_name) || Carp::croak("Can't open($file_name): $!");
+
+	my($line);
 
 	while ($line = <INX>)
 	{
-		next if ($line =~ /^(<\?xml|<DBI|<\/DBI)/);
+		next if ($line =~ m!^(<\?xml|<dbi|</dbi)!i);
 
-		if ($line =~ /<RESULTSET.+from\s+(.+)">/)
+		if ($line =~ m!<resultset .+? from (.+)">!i)
 		{
-			$table_name = $self -> decode_xml($1);
-
-			if ( ($$self{'_transform_tablenames'} == 1) && ($table_name =~ /^(.+?)\.(.+)$/) )
-			{
-				$schema_name	= $1;
-				$table_name		= $2;
-			}
-			else
-			{
-				$schema_name = '';
-			}
-
-			if ($$self{'_skip_schema_name'}{$schema_name} || $$self{'_skip_table_name'}{$table_name})
-			{
-				print STDERR "Skip table: $table_name. \n" if ($$self{'_verbose'});
-			}
-			else
-			{
-				push @{$$self{'_restored_table'} }, $table_name;
-
-				print STDERR "Restore table: $table_name. \n" if ($$self{'_verbose'});
-			}
+			$self -> process_table('Restore', $1);
 		}
-		elsif ($line =~ /<ROW>/)
+		elsif ( (! $$self{'_skipping'}) && ($line =~ m!<row>!i) )
 		{
-			@key	= ();
-			@value	= ();
-
-			while ( ($line = <INX>) !~ m|</ROW>|)
-			{
-				($key, $value) = ($1, $self -> decode_xml($2) ) if ($line =~ m|^\s*<(.+?)>(.*?)</\1>|);
-
-				if ($key =~ /timestamp/)
-				{
-					if ($$self{'_fiddle_timestamp'} == 1)
-					{
-						$value = '19700101' if ($value =~ /^0000/);
-						$value = substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2) . ' 00:00:00';
-					}
-					elsif ($$self{'_fiddle_timestamp'} == 2)
-					{
-						$value = '1970-01-01 00:00:00' if ($value =~ /^0000/);
-					}
-				}
-
-				push(@key, $key);
-				push(@value, $value);
-			}
-
 			# There may be a different number of fields from one row to the next.
-			# Remember, only non-null fields are output by sub backup().
+			# Remember, only non-null fields are output by method backup().
 
-			if ($$self{'_skip_schema_name'}{$schema_name} || $$self{'_skip_table_name'}{$table_name})
+			$$self{'_key'}		= [];
+			$$self{'_value'}	= [];
+
+			while ( ($line = <INX>) !~ m!</row>!i)
 			{
-			}
-			else
-			{
-				$sql = "insert into $table_name (" . join(', ', @key) . ') values (' . join(', ', ('?') x @key) . ')';
+				if ($line =~ m!^\s*<(.+?)>(.*?)</\1>!i)
+				{
+					push @{$$self{'_key'} }, $1;
 
-				$sth = $$self{'_dbh'} -> prepare($sql) || die("Can't prepare($sql): $DBI::errstr");
-
-				$sth -> execute(@value) || die("Can't execute($sql): $DBI::errstr");
-				$sth -> finish();
+					$self -> transform($1, $self -> decode_xml($2) );
+				}
 			}
+
+			$self -> write_row();
 		}
 	}
 
 	close INX;
 
-	[sort @{$$self{'_restored_table'} }];
+	[sort keys %{$$self{'_restored'} }];
 
 }	# End of restore.
+
+# -----------------------------------------------
+
+sub restore_in_order
+{
+	my($self, $input_file_name, $table) = @_;
+
+	Carp::croak('Missing parameter to new(): dbh') if (! $$self{'_dbh'});
+
+	my($table_name, $parser, $type, $record, $candidate_table, $row);
+
+	for $table_name (@$table)
+	{
+		$parser = XML::Records -> new($input_file_name);
+
+		$parser -> set_records('resultset');
+
+		for (;;)
+		{
+			($type, $record) = $parser -> get_record();
+
+			last if (! $record);
+
+			$candidate_table = $1 if ($$record{'statement'} =~ m!select \* from (.+)!);
+
+			$self -> process_table('Restore', $candidate_table);
+
+			# Warning: Do not use $candidate_table in the next line,
+			# where I've used _current_table, since the former has
+			# a schema as its prefix and the latter doesn't.
+
+			next if ($$self{'_skipping'} || $$self{'_restored'}{$$self{'_current_table'} });
+
+			for $row (@{$$record{'row'} })
+			{
+				# There may be a different number of fields from one row to the next.
+				# Remember, only non-null fields are output by method backup().
+
+				@{$$self{'_key'} }	= keys %$row;
+				$$self{'_value'}	= [];
+
+				$self -> transform($_, $$row{$_}) for @{$$self{'_key'} };
+				$self -> write_row();
+			}
+
+			last;
+		}
+	}
+
+}	# End of restore_in_order.
+
+# -----------------------------------------------
+
+sub split
+{
+	my($self, $file_name) = @_;
+
+	open(INX, $file_name) || Carp::croak("Can't open($file_name): $!");
+
+	my($line, $table_name, $output_file_name);
+
+	while ($line = <INX>)
+	{
+		next if ($line =~ m!^(<\?xml|</dbi)!i);
+
+		if ($line =~ m!^<dbi database = "(.+)">!i)
+		{
+			$$self{'_database'} = $1;
+
+			next;
+		}
+
+		if ($line =~ m!<resultset .+? from (.+)">!i)
+		{
+			$table_name = $1;
+
+			$self -> process_table('Split', $table_name);
+
+			# Close off the previous output file, if any.
+
+			if ($$self{'_output_is_open'})
+			{
+				$$self{'_output_is_open'} = 0;
+
+				print OUT qq|\t</resultset>\n|;
+				print OUT qq|</dbi>\n|;
+
+				close OUT;
+			}
+
+			if (! $$self{'_skipping'})
+			{
+				# Start the next output file.
+
+				$output_file_name			= "$$self{'_current_table'}.xml";
+				$output_file_name			= "$$self{'_current_schema'}.$output_file_name" if ($$self{'_current_schema'});
+				$output_file_name			= File::Spec -> catdir($$self{'_output_dir_name'}, $output_file_name);
+				$$self{'_output_is_open'}	= 1;
+
+				open(OUT, "> $output_file_name") || Carp::croak("Can't open($output_file_name): $!");
+
+				print OUT qq|<?xml version = "1.0"?>\n|;
+				print OUT qq|<dbi database = "$$self{'_database'}">\n|;
+				print OUT qq|\t<resultset statement = "select * from $table_name">\n|;
+			}
+		}
+		elsif ( (! $$self{'_skipping'}) && ($line =~ m!<row>!i) )
+		{
+			# There may be a different number of fields from one row to the next.
+			# Remember, only non-null fields are output by method backup().
+
+			print OUT qq|\t\t<row>\n|;
+
+			while ( ($line = <INX>) !~ m!</row>!i)
+			{
+				print OUT $line;
+			}
+
+			print OUT qq|\t\t</row>\n|;
+		}
+	}
+
+	close INX;
+
+	# Close off the previous file, if any.
+
+	if ($$self{'_output_is_open'})
+	{
+		print OUT qq|\t</resultset>\n|;
+		print OUT qq|</dbi>\n|;
+
+		close OUT;
+	}
+
+	[sort keys %{$$self{'_restored'} }];
+
+}	# End of split.
 
 # -----------------------------------------------
 
@@ -312,6 +458,49 @@ sub tables
 	$$self{'_tables'}	||= [sort map{s/$quote(.+)$quote/$1/; $_} $$self{'_dbh'} -> tables('%', '%', '%', 'table')];
 
 }	# End of tables.
+
+# -----------------------------------------------
+
+sub transform
+{
+	my($self, $key, $value) = @_;
+
+	if ($key =~ /timestamp/)
+	{
+		if ($$self{'_fiddle_timestamp'} == 1)
+		{
+			$value = '19700101' if ($value =~ /^0000/);
+			$value = substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2) . ' 00:00:00';
+		}
+		elsif ($$self{'_fiddle_timestamp'} == 2)
+		{
+			$value = '1970-01-01 00:00:00' if ($value =~ /^0000/);
+		}
+	}
+
+	push @{$$self{'_value'} }, $value;
+
+}	# End of transform.
+
+# -----------------------------------------------
+
+sub write_row
+{
+	my($self) = @_;
+
+	if ($$self{'_skip_schema_name'}{$$self{'_current_schema'} } || $$self{'_skip_table_name'}{$$self{'_current_table'} })
+	{
+	}
+	else
+	{
+		my($sql) = "insert into $$self{'_current_table'} (" . join(', ', @{$$self{'_key'} }) . ') values (' . join(', ', ('?') x @{$$self{'_key'} }) . ')';
+		my($sth) = $$self{'_dbh'} -> prepare($sql) || Carp::croak("Can't prepare($sql): $DBI::errstr");
+
+		$sth -> execute(@{$$self{'_value'} }) || Carp::croak("Can't execute($sql): $DBI::errstr");
+		$sth -> finish();
+	}
+
+}	# End of write_row.
 
 # -----------------------------------------------
 
@@ -341,9 +530,9 @@ C<DBIx::Admin::BackupRestore> - Back-up all tables in a db to XML, and restore t
 
 C<DBIx::Admin::BackupRestore> is a pure Perl module.
 
-It exports all data in all tables from one database to an XML file.
+It exports all data in all tables from one database to one or more XML files.
 
-Then that file can be imported into another database, possibly under a different database
+Then these files can be imported into another database, possibly under a different database
 server.
 
 Warning: It is designed on the assumption you have a stand-alone script which creates an
@@ -394,7 +583,9 @@ This parameter is optional.
 
 This is a database handle.
 
-This parameter is mandatory.
+This parameter is mandatory when calling methods C<backup()> and C<restore*()>,
+but is not required when calling method C<split()>, since the latter is just a
+file-to-file operation.
 
 =item fiddle_timestamp
 
@@ -427,8 +618,8 @@ match /timestamp/ in this manner:
 	Values not matching that pattern are not converted.
 	Eg: This - 0000-00-00 00:00:00 - is converted to 1970-01-01 00:00:00
 	and today - 2005-04-15 09:34:00 - is not converted.
-	You would use this option when transferring data from MySQL's 'timestamp' type
-	to Postgres' 'timestamp' type, and some MySQL output values match /0000-00-00 00:00:00/
+	You would use this option when transferring data from MySQL's 'datetime' type
+	to Postgres' 'datetime' type, and some MySQL output values match /0000-00-00 00:00:00/
 	and some values are real dates, such as 2005-04-15 09:34:00.
 
 This parameter is optional.
@@ -500,11 +691,57 @@ You would normally write this straight to disk.
 
 The database name is passed in here to help decorate the XML.
 
-=head1 Method: restore($file_name)
+As of version 1.06, the XML tags are in lower case.
+
+Method restore() will read a file containing upper or lower case tags.
+Method restore_in_order() won't.
+
+=head1 Method: C<restore($file_name)>
 
 Returns an array ref of imported table names. They are sorted by name.
 
 Opens and reads the given file, presumably one output by a previous call to backup().
+
+The data read in is used to populate database tables. Use method C<split()>
+to output to disk files.
+
+=head1 Method: C<restore_in_order($file_name, [array ref of table names])>
+
+Returns nothing.
+
+Opens and reads the given file, presumably one output by a previous call to backup().
+
+The data read in is used to populate database tables. Use method C<split()>
+to output to disk files.
+
+Restores the tables in the order given in the array ref parameter.
+
+This allows you to define a column with a clause such as 'references foreign_table (foreign_column)',
+and to populate the foreign_table before the dependent table.
+
+And no, mutually-dependent and self-referential tables are still not catered for.
+
+And yes, it does read the file once per table. Luckily, XML::Records is fast.
+
+But if this seems like too much overhead, see method C<split()>.
+
+=head1 Method C<split($file_name)>
+
+Returns an array ref of imported table names. They are sorted by name.
+
+Opens and reads the given file, presumably one output by a previous call to backup().
+
+Each table not being skipped is output to a separate disk file, with headers and footers
+the same as output by method C<backup()>.
+
+This means each file can be input to methods C<restore()> and C<restore_in_order()>.
+
+The tables' schema names and table names are used to construct the file names, together
+with an extension of '.xml'.
+
+See examples/split-xml.pl and all-tables.xml for a demo.
+
+Lastly, method C<split()> uses lower-case XML tags.
 
 =head1 Example code
 
@@ -517,6 +754,60 @@ There are 2 demo programs:
 =item backup-db.pl
 
 =item restore-db.pl
+
+=back
+
+=head1 FAQ
+
+=over 4
+
+=item Why do I get 'duplicate key' errors after restoring?
+
+Most likely because:
+
+=over 4
+
+=item You are using Postgres or equivalent
+
+=item You created a sequence
+
+Eg: create sequence t_seq.
+
+=item You created a table with the primary key referring to the sequence
+
+Eg: create table t (t_id integer primary key default nextval('t_seq'), ...).
+
+=item You populated the table
+
+Let's say with 10 records, so the sequence is now at 10.
+
+And the primary key field now contains the values 1 .. 10.
+
+=item You exported the table with this module
+
+Note: The export file contains the values 1 .. 10 in the primary key field.
+
+=item You recreated the sequence
+
+So the sequence is now at 1.
+
+=item You recreated the table
+
+=item You imported the data with this module
+
+Note: Since the import file contains the values 1 .. 10 in the primary key field,
+these values are used to populate the table, and the sequence's nextval() is never
+called.
+
+So the sequence is still at 1.
+
+=item You tried to insert a record, which triggered a call to nextval()
+
+But this call returns 1 (or perhaps 2), which is already in the table.
+
+Hence the error about 'duplicate key'.
+
+=back
 
 =back
 
@@ -544,7 +835,21 @@ importing too.
 
 =head1 Required Modules
 
-Carp.
+Install the 3 XML modules in this order.
+
+=over 4
+
+=item Carp
+
+=item File::Spec
+
+=item XML::Parser
+
+=item XML::TokeParser
+
+=item XML::Records
+
+=back
 
 =head1 Changes
 

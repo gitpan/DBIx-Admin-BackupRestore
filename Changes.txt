@@ -1,5 +1,35 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.06  Fri May 20 15:45:00 2005
+	- Correct docs discussing the value 2 for the fiddle_timestamp option, which said
+		timestamp and should have said datetime.
+	- Add an FAQ to the docs
+	- Add method restore_in_order(), which lets you specify the order in which tables
+		are restored. This allows you to define a column with a clause such as
+		'references foreign_table (foreign_column)', and to populate the foreign_table
+		before the dependent table.
+		But mutually-dependent and self-referential tables are still not catered for.
+	- Add method split(), which reads an XML file output by backup() and splits out into
+		a separate file each table you are not skipping. The file names are the tables'
+		names, including schema if any, and with an extension of 'xml'. The output files
+		have headers and footers so they are identical in structure to the file output
+		by backup(). Hence they can be fed back in to restore() and restore_in_order().
+		This method helps circumvent the drawback of restore_in_order(), which reads its
+		input file once per table.
+		Since this is a file-to-file operation, the dbh parameter to new() is no longer
+		mandatory.
+		See examples/split-xml.pl and all-tables.xml for a demo.
+	- Change methods backup(), restore() and the new restore_in_order() and split(), to use
+		lower case XML tags 'dbi', 'resultset', and 'row', as they should have been in the
+		first place.
+	- Methods restore() and split() will read a file containing upper or lower case tags.
+	- Warning: restore_in_order() only handles lower case tags, due to the way XML::Records
+		works.
+	- This module now requires these modules, installed in this order:
+		o XML::Parser
+		o XML::TokeParser
+		o XML::Records
+
 1.05  Fri Apr 15 09:34:00 2005
 	- Add another value to the range accepted by the option fiddle_timestamp.
 		This option is only used when restoring XML-based data to a database.
@@ -22,8 +52,8 @@ Revision history for Perl extension DBIx::Admin::BackupRestore.
 			Values not matching that pattern are not converted.
 			Eg: This - 0000-00-00 00:00:00 - is converted to 1970-01-01 00:00:00
 			and today - 2005-04-15 09:34:00 - is not converted.
-			You would use this option when transferring data from MySQL's 'timestamp' type
-			to Postgres' 'timestamp' type, and some MySQL output values match /0000-00-00 00:00:00/
+			You would use this option when transferring data from MySQL's 'datetime' type
+			to Postgres' 'datetime' type, and some MySQL output values match /0000-00-00 00:00:00/
 			and some values are real dates, such as 2005-04-15 09:34:00.
 	- Expand the docs referring to fiddle_timestamp
 
