@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.06';
+our $VERSION = '1.07';
 
 my(%_decode_xml) =
 (
@@ -84,9 +84,13 @@ my(%_encode_xml) =
 	my(%_attr_data) =
 	(
 		_clean					=> 0,
+		_croak_on_error			=> 1,
 		_dbh					=> '',
 		_fiddle_timestamp		=> 1,
+		_odbc					=> 0,
 		_output_dir_name		=> '',
+		_rename_columns			=> {},
+		_rename_tables			=> {},
 		_skip_schema			=> [],
 		_skip_tables			=> [],
 		_transform_tablenames	=> 0,
@@ -106,6 +110,103 @@ my(%_encode_xml) =
 	}
 
 }	# End of encapsulated class data.
+
+# -----------------------------------------------
+
+sub adjust_case
+{
+	my($self, $s) = @_;
+
+	$$self{'_dbh'}{'FetchHashKeyName'} eq 'NAME_uc' ? uc $s : $$self{'_dbh'}{'FetchHashKeyName'} eq 'NAME_lc' ? lc $s : $s;
+
+}	# End of adjust_case.
+
+# -----------------------------------------------
+
+sub backup
+{
+	my($self, $database) = @_;
+
+	Carp::croak('Missing parameter to new(): dbh') if (! $$self{'_dbh'});
+
+	$$self{'_quote'}	= $$self{'_dbh'} ? $$self{'_dbh'} -> get_info(29) : ''; # SQL_IDENTIFIER_QUOTE_CHAR.
+	$$self{'_tables'}	= $$self{'_odbc'} ? $self -> odbc_tables() : $self -> tables();
+	$$self{'_xml'}		= qq|<?xml version = "1.0"?>\n|;
+	$$self{'_xml'}		.= qq|<dbi database = "|. $self -> encode_xml($database) . qq|">\n|;
+
+	my($column_name);
+	my($data, $display_sql, $display_table);
+	my($field);
+	my($i);
+	my($output_column_name);
+	my($sql, $sth);
+	my($table_name);
+	my($xml);
+
+	for $table_name (@{$$self{'_tables'} })
+	{
+		$display_table = $self -> adjust_case($table_name);
+
+		if ($$self{'_skip_table_name'}{$display_table})
+		{
+			print STDERR "Skip table: $table_name. \n" if ($$self{'_verbose'});
+
+			next;
+		}
+
+		$sql			= "select * from $$self{'_quote'}$table_name$$self{'_quote'}";
+		$display_table	= $$self{'_rename_tables'}{$display_table} ? $$self{'_rename_tables'}{$display_table} : $display_table;
+		$display_sql	= "select * from $display_table";
+		$display_sql	= $self -> adjust_case($display_sql);
+		$display_sql	= $self -> encode_xml($display_sql);
+		$$self{'_xml'}	.= qq|\t<resultset statement = "$display_sql">\n|;
+		$sth			= $$self{'_dbh'} -> prepare($sql) || Carp::croak("Can't prepare($sql): $DBI::errstr");
+
+		print STDERR "Backup table: $display_table. \n" if ($$self{'_verbose'});
+
+		eval{$sth -> execute()};
+
+		if ($@)
+		{
+			Carp::croak("Can't execute($sql): $DBI::errstr") if ($$self{'_croak_on_error'});
+
+			print STDERR "$@" if ($$self{'_verbose'});
+
+			next;
+		}
+
+		$column_name							= $$sth{$$self{'_dbh'}{'FetchHashKeyName'} };
+		$$self{'_column_name'}{$display_table}	= [map{$i = $$self{'_rename_columns'}{$_} ? $$self{'_rename_columns'}{$_} : $_; $i =~ tr/ /_/; $i} sort @$column_name];
+
+		while ($data = $sth -> fetch() )
+		{
+			$i		= - 1;
+			$xml	= '';
+
+			for $field (@$data)
+			{
+				$i++;
+
+				if (defined($field) )
+				{
+					$field				=~ tr/\x20-\x7E//cd if ($$self{'_clean'});
+					$output_column_name	= $$self{'_rename_columns'}{$$column_name[$i]} ? $$self{'_rename_columns'}{$$column_name[$i]} : $$column_name[$i];
+					$output_column_name	=~ tr/ /_/;
+					$xml				.= "\t\t\t<$output_column_name>" . $self -> encode_xml($field) . '</' . $$column_name[$i] . ">\n";
+				}
+			}
+
+			$$self{'_xml'} .= "\t\t<row>\n$xml\t\t</row>\n" if ($xml);
+		}
+
+		Carp::croak("Can't fetchrow_hashref($sql): $DBI::errstr") if ($DBI::errstr);
+
+		$$self{'_xml'} .= "\t</resultset>\n";
+	}
+
+	$$self{'_xml'} .= "</dbi>\n";
+
+}	# End of backup.
 
 # -----------------------------------------------
 
@@ -135,56 +236,13 @@ sub encode_xml
 
 # -----------------------------------------------
 
-sub backup
+sub get_column_names
 {
-	my($self, $database) = @_;
+	my($self) = @_;
 
-	Carp::croak('Missing parameter to new(): dbh') if (! $$self{'_dbh'});
+	$$self{'_column_name'};
 
-	$$self{'_xml'} = qq|<?xml version = "1.0"?>\n|;
-	$$self{'_xml'} .= qq|<dbi database = "|. $self -> encode_xml($database) . qq|">\n|;
-
-	my($table_name, $sql, $sth, $column_name, $data, $i, $field);
-
-	for $table_name (@{$$self{'_tables'} })
-	{
-		$sql			= "select * from $table_name";
-		$$self{'_xml'}	.= qq|\t<resultset statement = "| . $self -> encode_xml($sql) . qq|">\n|;
-		$sth			= $$self{'_dbh'} -> prepare($sql) || Carp::croak("Can't prepare($sql): $DBI::errstr");
-
-		print STDERR "Backup table: $table_name. \n" if ($$self{'_verbose'});
-
-		$sth -> execute() || Carp::croak("Can't execute($sql): $DBI::errstr");
-
-		$column_name = $$sth{'NAME'};
-
-		while ($data = $sth -> fetch() )
-		{
-			$$self{'_xml'}	.= "\t\t<row>\n";
-			$i				= - 1;
-
-			for $field (@$data)
-			{
-				$i++;
-
-				if (defined($field) )
-				{
-					$field			=~ tr/\x20-\x7E//cd if ($$self{'_clean'});
-					$$self{'_xml'}	.= "\t\t\t<" . $$column_name[$i] . '>' . $self -> encode_xml($field) . '</' . $$column_name[$i] . ">\n";
-				}
-			}
-
-			$$self{'_xml'} .= "\t\t</row>\n";
-		}
-
-		Carp::croak("Can't fetchrow_hashref($sql): $DBI::errstr") if ($DBI::errstr);
-
-		$$self{'_xml'} .= "\t</resultset>\n";
-	}
-
-	$$self{'_xml'} .= "</dbi>\n";
-
-}	# End of backup.
+}	# End of get_column_names.
 
 # -----------------------------------------------
 
@@ -207,24 +265,34 @@ sub new
 		}
 	}
 
-	$self -> tables() if ($$self{'_dbh'});
-
-	$$self{'_current_schema'}										= '';
-	$$self{'_current_table'}										= '';
-	$$self{'_database'}												= [];
-	$$self{'_key'}													= [];
-	$$self{'_output_is_open'}										= 0;
-	$$self{'_restored'}												= {};
-	$$self{'_skipped'}												= {};
-	$$self{'_skipping'}												= 0;
+	$$self{'_column_name'}		= {};
+	$$self{'_current_schema'}	= '';
+	$$self{'_current_table'}	= '';
+	$$self{'_database'}			= [];
+	$$self{'_key'}				= [];
+	$$self{'_output_is_open'}	= 0;
+	$$self{'_quote'}			= '';
+	$$self{'_restored'}			= {};
+	$$self{'_skipped'}			= {};
+	$$self{'_skipping'}			= 0;
 	@{$$self{'_skip_schema_name'} }{@{$$self{'_skip_schema'} } }	= (1) x @{$$self{'_skip_schema'} };
 	@{$$self{'_skip_table_name'} }{@{$$self{'_skip_tables'} } }		= (1) x @{$$self{'_skip_tables'} };
-	$$self{'_value'}												= [];
-	$$self{'_xml'}													= '';
+	$$self{'_value'}			= [];
+	$$self{'_xml'}				= '';
 
 	return $self;
 
 }	# End of new.
+
+# -----------------------------------------------
+
+sub odbc_tables
+{
+	my($self) = @_;
+
+	[map{s/^$$self{'_quote'}.+?$$self{'_quote'}\.$$self{'_quote'}(.+)$$self{'_quote'}/$1/; $_} sort $$self{'_dbh'} -> tables()];
+
+}	# End of odbc_tables.
 
 # -----------------------------------------------
 
@@ -453,9 +521,9 @@ sub split
 
 sub tables
 {
-	my($self)			= @_;
-	my($quote)			= $$self{'_dbh'} -> get_info(29) || ''; # SQL_IDENTIFIER_QUOTE_CHAR.
-	$$self{'_tables'}	||= [sort map{s/$quote(.+)$quote/$1/; $_} $$self{'_dbh'} -> tables('%', '%', '%', 'table')];
+	my($self) = @_;
+
+	[sort map{s/$$self{'_quote'}(.+)$$self{'_quote'}/$1/; $_} $$self{'_dbh'} -> tables('%', '%', '%', 'table')];
 
 }	# End of tables.
 
@@ -510,7 +578,7 @@ __END__
 
 =head1 NAME
 
-C<DBIx::Admin::BackupRestore> - Back-up all tables in a db to XML, and restore them
+C<DBIx::Admin::BackupRestore> - Backup all tables in a database to XML, and restore them
 
 =head1 Synopsis
 
@@ -530,19 +598,32 @@ C<DBIx::Admin::BackupRestore> - Back-up all tables in a db to XML, and restore t
 
 C<DBIx::Admin::BackupRestore> is a pure Perl module.
 
-It exports all data in all tables from one database to one or more XML files.
+It exports all data - except nulls - in all tables from one database to one or more XML files.
 
 Then these files can be imported into another database, possibly under a different database
-server.
+server, using methods C<restore()> or C<restore_in_order()>.
 
-Warning: It is designed on the assumption you have a stand-alone script which creates an
-appropriate set of empty tables on the destination database server. You run that script,
+In the output, all table names and column names containing spaces have those spaces
+converted to underscores. This is A Really Good Idea.
+
+Also, the case of the output table and column names is governed by the database handle
+attribute FetchHashKeyName.
+
+Warning: This module is designed on the assumption you have a stand-alone script which creates
+an appropriate set of empty tables on the destination database server. You run that script,
 and then run this module in 'restore' mode.
 
+Such a stand-alone script is trivial, by getting the output of method C<get_column_names()>
+and feeding it into the constructor of C<DBIx::Admin::CreateTrivialSchema>. Of course, you
+would only use this feature as a crude way of dumping the data into a database for
+quick inspection before processing the XML properly.
+
 This module is used daily to transfer a MySQL database under MS Windows to a Postgres
-database under Linux.
+database under GNU/Linux.
 
 Similar modules are discussed below.
+
+See also: http://savage.net.au/Ron/html/msaccess2rdbms.html
 
 =head1 Distributions
 
@@ -576,6 +657,20 @@ If new is called as new(clean => 1), the backup phase deletes any characters out
 range 20 .. 7E (hex).
 
 The restore phase ignores this parameter.
+
+This parameter is optional.
+
+=item croak_on_error
+
+This parameter takes one of these values: 0 or 1.
+
+The default value is 1, for backwards compatibility.
+
+During backup(), the $sth -> execute() is now wrapped in eval{}, and if
+an error occurs, and croak_on_error is 1, we Carp::croak.
+
+If croak_on_error is 0, we continue. Not only that, but if verbose is 1,
+the error is printed to STDERR.
 
 This parameter is optional.
 
@@ -624,6 +719,52 @@ match /timestamp/ in this manner:
 
 This parameter is optional.
 
+=item odbc
+
+This parameter takes one of these values: 0 or 1.
+
+The default value is 0.
+
+During backup, if odbc is 1 we use the simplified call $dbh -> tables()
+to get the list of table names. This list includes what MS Access calls
+Queries, which are possibly equivalent to views. MS Access does not
+support the syntax used in the non-ODBC situation:
+$dbh -> tables('%', '%', '%', 'table').
+
+This parameter is optional.
+
+=item rename_columns
+
+This parameter takes a hash href.
+
+You specify a hash ref in the form:
+
+	rename_columns => {'old name' => 'new name', ...}.
+
+For example, 'order' is a reserved word under MySQL, so you might use:
+
+	rename_columns => {order => 'orders'}.
+
+The option affects all tables.
+
+The database handle attribute FetchHashKeyName affects this option.
+Renaming takes place after the effect of FetchHashKeyName.
+
+This parameter is optional.
+
+=item rename_tables
+
+This parameter takes a hash href.
+
+You specify a hash ref in the form:
+
+	rename_tables => {'old name' => 'new name', ...}.
+
+The database handle attribute FetchHashKeyName affects this option.
+Renaming takes place after the effect of FetchHashKeyName.
+
+This parameter is optional.
+
 =item skip_schema
 
 The default value is [].
@@ -641,13 +782,16 @@ new(skip_schema => ['information_schema', 'pg_catalog'], transform_tablenames =>
 
 The default value is [].
 
-If new is called as new(skip_tables => ['some_table_name']), the restore phase
+If new is called as new(skip_tables => ['some_table_name', ...]), the restore phase
 does not restore the tables named in the call to C<new()>.
 
 This option is designed to work with CGI scripts using the module CGI::Sessions.
 
 Now, the CGI script can run with the current CGI::Session data, and stale CGI::Session
 data is not restored from the XML file.
+
+See examples/backup-db.pl for a list of MS Access tables names which you are unlikely
+to want to transfer to an RDBMS.
 
 This parameter is optional.
 
@@ -695,6 +839,18 @@ As of version 1.06, the XML tags are in lower case.
 
 Method restore() will read a file containing upper or lower case tags.
 Method restore_in_order() won't.
+
+=head1 Method: get_column_names
+
+This returns a hash ref, where the keys are table names, possibly transformed according
+to the database handle attribute FetchHashKeyName, and the values are array refs of
+column names, also converted according to FetchHashKeyName.
+
+Note: All spaces in table names are converted to underscores.
+
+Further, these column names are sorted, and all spaces in column names are converted to underscores.
+
+This hashref is acceptable to the module DBIx::Admin::CreateTrivialSchema :-).
 
 =head1 Method: C<restore($file_name)>
 

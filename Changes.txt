@@ -1,5 +1,57 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.07  Tue Jun 28 13:41:11 2005
+	- The default behaviour of this version is the same as for previous version,
+		so there is no need to upgrade unless you need the new features.
+	- Fix bug whereby sub backup could output <row></row> because all columns
+		in a row were null, & sub restore couldn't cope.
+	- Document that all spaces are converted to underscores in table and column names.
+	- New options:
+		o The value of the database handle attribute FetchHashKeyName governs
+			how table names are handled. Values are:
+			'NAME': The default - use the value returned by the database server
+			'NAME_uc': Convert table names to upper case
+			'NAME_lc': Convert to lower case. This is the recommended value
+
+			This possible conversion of the case of table names affects how you
+			specify table names in the constructor options:
+			- rename_columns
+			- rename_tables
+			- skip_tables
+
+		The following new options can be passed to the constructor of this module.
+
+		o croak_on_error => 0 or 1. 1 is the default, for backwards compatibility.
+			During backup(), the $sth -> execute() is now wrapped in eval{}, and if
+			an error occurs, and croak_on_error is 1, we Carp::croak.
+			If croak_on_error is 0, we continue. Not only that, but if verbose is 1,
+			the error is printed to STDERR.
+		o odbc => 0 or 1. 0 is the default.
+			During backup, if odbc is 1 we use the simplified call $dbh -> tables()
+			to get the list of table names. This list includes what MS Access calls
+			Queries, which are possibly equivalent to views. MS Access does not
+			support the syntax used in the non-ODBC situation:
+			$dbh -> tables('%', '%', '%', 'table').
+		o rename_columns => {}. You can specify a hash ref in the form:
+			rename_columns => {'old name' => 'new name', ...}.
+			For example, 'order' is a reserved word under MySQL, so you would use:
+			rename_columns => {order => 'orders'} (or whatever you want).
+			The option affects all tables.
+			The database handle attribute FetchHashKeyName affects this option.
+			Renaming takes place after the effect of FetchHashKeyName.
+		o rename_tables => {}. You can specify a hash ref in the form:
+			rename_tables => {'old name' => 'new name', ...}.
+			The database handle attribute FetchHashKeyName affects this option.
+			Renaming takes place after the effect of FetchHashKeyName.
+	- Add method get_column_names(). This returns a hash ref, where the keys are
+		table names, possibly transformed according to the database handle attribute
+		FetchHashKeyName, and the values are array refs of column names, also converted
+		according to the aforesaid and understated FetchHashKeyName. Further, these
+		column names are sorted, and all spaces in column names are converted to underscores.
+		This hashref is acceptable to the module DBIx::Admin::CreateTrivialSchema :-).
+	- The demo examples/backup-db.pl contains a list of MS Access tables which you almost
+		certainly want to supply to the skip_tables option if exporting from MS Access.
+
 1.06  Fri May 20 15:45:00 2005
 	- Correct docs discussing the value 2 for the fiddle_timestamp option, which said
 		timestamp and should have said datetime.
