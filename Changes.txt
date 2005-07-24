@@ -1,5 +1,12 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.08  Tue Jul 19 10:45:00 2005
+	- The previous patches did not include sub backup() calling sub process_table()
+		to split the schema name off from the table name, so table names with schema
+		names still attached were not being skipped. Big mistake. My aplologies
+	- Add XML::Parser, XML::Records and XML::TokeParser to Build.PL and Makefile.PL.
+		They should have been included since V 1.06
+
 1.07  Tue Jun 28 13:41:11 2005
 	- The default behaviour of this version is the same as for previous version,
 		so there is no need to upgrade unless you need the new features.

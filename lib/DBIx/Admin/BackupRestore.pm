@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.07';
+our $VERSION = '1.08';
 
 my(%_decode_xml) =
 (
@@ -145,24 +145,18 @@ sub backup
 
 	for $table_name (@{$$self{'_tables'} })
 	{
-		$display_table = $self -> adjust_case($table_name);
+		$self -> process_table('backup', $table_name);
 
-		if ($$self{'_skip_table_name'}{$display_table})
-		{
-			print STDERR "Skip table: $table_name. \n" if ($$self{'_verbose'});
+		next if ($$self{'_skipping'});
 
-			next;
-		}
-
-		$sql			= "select * from $$self{'_quote'}$table_name$$self{'_quote'}";
+		$display_table	= $self -> adjust_case($$self{'_current_table'});
+		$sql			= "select * from $$self{'_current_table'}";
 		$display_table	= $$self{'_rename_tables'}{$display_table} ? $$self{'_rename_tables'}{$display_table} : $display_table;
 		$display_sql	= "select * from $display_table";
 		$display_sql	= $self -> adjust_case($display_sql);
 		$display_sql	= $self -> encode_xml($display_sql);
 		$$self{'_xml'}	.= qq|\t<resultset statement = "$display_sql">\n|;
 		$sth			= $$self{'_dbh'} -> prepare($sql) || Carp::croak("Can't prepare($sql): $DBI::errstr");
-
-		print STDERR "Backup table: $display_table. \n" if ($$self{'_verbose'});
 
 		eval{$sth -> execute()};
 

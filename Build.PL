@@ -11,6 +11,9 @@ Module::Build -> new
 	},
 	requires		=>
 	{
-		Carp		=> 0,
+		Carp			=> 0,
+		XML::Parser		=> 0,
+		XML::Records	=> 0,
+		XML::TokeParser	=> 0,
 	},
 ) -> create_build_script();

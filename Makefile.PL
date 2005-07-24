@@ -26,6 +26,9 @@ WriteMakefile
 	{
 		Carp			=> 0,
 		Test::More		=> 0,
+		XML::Parser		=> 0,
+		XML::Records	=> 0,
+		XML::TokeParser	=> 0,
 	},
 	VERSION_FROM		=> 'lib/DBIx/Admin/BackupRestore.pm',
 );
