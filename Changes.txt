@@ -1,5 +1,26 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.09  Thu Feb 09 15:53:00 2006
+	- Fix broken method restore_in_order()
+	- Add support for exporting from Oracle by adding 4 new parameters to new():
+		o dbi_catalog
+		o dbi_schema
+		o dbi_table
+		o dbi_type
+		These are actually used in the call to DBI's table_info() method.
+		Usage:
+		o MySQL: The default values of these parameters Just Work
+		o Oracle: Set dbi_schema to the uc(username) used when you called DBI's connect() method
+		o Postgres: Set dbi_schema to 'public'
+	- Importing into Oracle does not handle sequences at all
+	- Switch from DBI's table() method to table_info(). This is for Oracle
+	- Discard table names which match /^BIN\$.+\$./. This is for Oracle
+	- Change the handling of quotes around schema and table names. Previously the first and last
+		quote was removed, so a name like `public.t` became public.t. But with Oracle, quotes are
+		used around the schema and table names separately, so "X"."T" became X"."T :-(.
+		Now, all quotes are removed, so `public.t` still becomes public.t, but also "X"."T"
+		becomes X.T.
+
 1.08  Tue Jul 19 10:45:00 2005
 	- The previous patches did not include sub backup() calling sub process_table()
 		to split the schema name off from the table name, so table names with schema

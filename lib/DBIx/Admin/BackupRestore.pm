@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.08';
+our $VERSION = '1.09';
 
 my(%_decode_xml) =
 (
@@ -86,6 +86,10 @@ my(%_encode_xml) =
 		_clean					=> 0,
 		_croak_on_error			=> 1,
 		_dbh					=> '',
+		_dbi_catalog			=> undef,
+		_dbi_schema				=> undef,
+		_dbi_table				=> '%',
+		_dbi_type				=> 'TABLE',
 		_fiddle_timestamp		=> 1,
 		_odbc					=> 0,
 		_output_dir_name		=> '',
@@ -284,7 +288,11 @@ sub odbc_tables
 {
 	my($self) = @_;
 
-	[map{s/^$$self{'_quote'}.+?$$self{'_quote'}\.$$self{'_quote'}(.+)$$self{'_quote'}/$1/; $_} sort $$self{'_dbh'} -> tables()];
+	[
+		map{s/^$$self{'_quote'}.+?$$self{'_quote'}\.$$self{'_quote'}(.+)$$self{'_quote'}/$1/; $_}
+		grep{! /^BIN\$.+\$./}	# Discard 'funny' Oracle table names, like BIN$C544WGedCuHgRAADuk1i5g==$0.
+		sort $$self{'_dbh'} -> tables()
+	];
 
 }	# End of odbc_tables.
 
@@ -394,17 +402,26 @@ sub restore_in_order
 		{
 			($type, $record) = $parser -> get_record();
 
+			# Exit if no data found.
+
 			last if (! $record);
 
 			$candidate_table = $1 if ($$record{'statement'} =~ m!select \* from (.+)!);
 
+			# Skip if the data is not for the 'current' table.
+
+			next if ($candidate_table ne $table_name);
+
+			# Skip if the data is not wanted.
+
+			next if ($$self{'_skipping'});
+
 			$self -> process_table('Restore', $candidate_table);
 
-			# Warning: Do not use $candidate_table in the next line,
-			# where I've used _current_table, since the former has
-			# a schema as its prefix and the latter doesn't.
+			# Warning: At this point, if the input file has no data for a table,
+			# $$record{'row'} will be undef, so don't access @{$$record{'row'} }.
 
-			next if ($$self{'_skipping'} || $$self{'_restored'}{$$self{'_current_table'} });
+			next if (! $$record{'row'});
 
 			for $row (@{$$record{'row'} })
 			{
@@ -417,6 +434,8 @@ sub restore_in_order
 				$self -> transform($_, $$row{$_}) for @{$$self{'_key'} };
 				$self -> write_row();
 			}
+
+			# Exit if table restored.
 
 			last;
 		}
@@ -517,7 +536,15 @@ sub tables
 {
 	my($self) = @_;
 
-	[sort map{s/$$self{'_quote'}(.+)$$self{'_quote'}/$1/; $_} $$self{'_dbh'} -> tables('%', '%', '%', 'table')];
+	[
+		sort
+		map{s/$$self{'_quote'}//g; $_}
+		grep{! /^BIN\$.+\$./}	# Discard 'funny' Oracle table names, like BIN$C544WGedCuHgRAADuk1i5g==$0.
+		map{$$_{'TABLE_NAME'} }
+		@{$$self{'_dbh'}
+		-> table_info($$self{'_dbi_catalog'}, $$self{'_dbi_schema'}, $$self{'_dbi_table'}, $$self{'_dbi_type'})
+		-> fetchall_arrayref({})}
+	];
 
 }	# End of tables.
 
@@ -594,8 +621,12 @@ C<DBIx::Admin::BackupRestore> is a pure Perl module.
 
 It exports all data - except nulls - in all tables from one database to one or more XML files.
 
+Actually, not all tables. Table names which match /^BIN\$.+\$./ are discarded. This is for Oracle.
+
 Then these files can be imported into another database, possibly under a different database
 server, using methods C<restore()> or C<restore_in_order()>.
+
+Note: Importing into Oracle does not handle sequences at all.
 
 In the output, all table names and column names containing spaces have those spaces
 converted to underscores. This is A Really Good Idea.
@@ -675,6 +706,61 @@ This is a database handle.
 This parameter is mandatory when calling methods C<backup()> and C<restore*()>,
 but is not required when calling method C<split()>, since the latter is just a
 file-to-file operation.
+
+=item dbi_catalog, dbi_schema, dbi_table, dbi_type
+
+These 4 parameters are passed to DBI's C<table_info()> method, to get a list of table names.
+
+The default values suit MySQL:
+
+=over 4
+
+=item dbi_catalog = undef
+
+=item dbi_schema = undef
+
+=item dbi_table = '%'
+
+=item dbi_type = 'TABLE'
+
+=back
+
+For Oracle, use:
+
+=over 4
+
+=item dbi_catalog = undef
+
+=item dbi_schema = uc $user
+
+=item dbi_table = '%'
+
+=item dbi_type = 'TABLE'
+
+=back
+
+That is, for Oracle you would call this module's constructor like so:
+
+	$user = 'The user name used in the call to DBI -> connect(...)';
+	new(dbh => $dbh, dbi_schema => uc $user);
+
+For Postgres use:
+
+=over 4
+
+=item dbi_catalog = undef
+
+=item dbi_schema = 'public'
+
+=item dbi_table = '%'
+
+=item dbi_type = 'TABLE'
+
+=back
+
+That is, for Postgres you would call this module's constructor like so:
+
+	new(dbh => $dbh, dbi_schema => 'public');
 
 =item fiddle_timestamp
 
