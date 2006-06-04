@@ -1,5 +1,8 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.10  Wed May 17 11:34:00 2006
+	- Patch to handle the case where the table has 1 row, and XML::Records then does not return an array ref
+
 1.09  Thu Feb 09 15:53:00 2006
 	- Fix broken method restore_in_order()
 	- Add support for exporting from Oracle by adding 4 new parameters to new():

@@ -1,11 +1,12 @@
---- #YAML:1.0
+---
 name: DBIx-Admin-BackupRestore
-version: 1.09
+version: 1.10
 author:
   - Ron Savage <ron@savage.net.au>
-abstract: |-
-  Backup all tables in a database to XML, and restore them
+abstract: 'Backup all tables in a database to XML, and restore them'
 license: artistic
+resources:
+  license: http://opensource.org/licenses/artistic-license.php
 requires:
   Carp: 0
   XML::Parser: 0
@@ -16,5 +17,8 @@ build_requires:
 provides:
   DBIx::Admin::BackupRestore:
     file: lib/DBIx/Admin/BackupRestore.pm
-    version: 1.09
-generated_by: Module::Build version 0.2611
+    version: 1.10
+generated_by: Module::Build version 0.2801
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.2.html
+  version: 1.2

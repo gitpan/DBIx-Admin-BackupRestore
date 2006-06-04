@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.09';
+our $VERSION = '1.10';
 
 my(%_decode_xml) =
 (
@@ -422,6 +422,12 @@ sub restore_in_order
 			# $$record{'row'} will be undef, so don't access @{$$record{'row'} }.
 
 			next if (! $$record{'row'});
+
+			# Warning. If the XML file contains 1 'record', XML::Records
+			# returns text or a hash ref, not an array ref containing one element.
+			# Due to the nature of our data, we can ignore the case of textual data.
+
+			$$record{'row'} = [$$record{'row'}] if (ref $$record{'row'} ne 'ARRAY');
 
 			for $row (@{$$record{'row'} })
 			{
