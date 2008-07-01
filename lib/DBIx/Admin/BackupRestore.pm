@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.10';
+our $VERSION = '1.11';
 
 my(%_decode_xml) =
 (
@@ -562,14 +562,19 @@ sub transform
 
 	if ($key =~ /timestamp/)
 	{
-		if ($$self{'_fiddle_timestamp'} == 1)
+		if ($$self{'_fiddle_timestamp'} & 0x01)
 		{
 			$value = '19700101' if ($value =~ /^0000/);
 			$value = substr($value, 0, 4) . '-' . substr($value, 4, 2) . '-' . substr($value, 6, 2) . ' 00:00:00';
 		}
-		elsif ($$self{'_fiddle_timestamp'} == 2)
+		elsif ($$self{'_fiddle_timestamp'} & 0x02)
 		{
 			$value = '1970-01-01 00:00:00' if ($value =~ /^0000/);
+		}
+
+		if ($$self{'_fiddle_timestamp'} & 0x80)
+		{
+			$value = '1970-01-01 00:00:01' if ($value eq '1970-01-01 00:00:00');
 		}
 	}
 
@@ -770,7 +775,9 @@ That is, for Postgres you would call this module's constructor like so:
 
 =item fiddle_timestamp
 
-This parameter takes one of these values: 0, 1 or 2.
+This parameter takes one of these values: 0, 1 or 2, or any of those values + 128.
+
+The 128 means the top (left-most) bit in the byte value of this parameter is set.
 
 The default value is 1.
 
@@ -802,6 +809,12 @@ match /timestamp/ in this manner:
 	You would use this option when transferring data from MySQL's 'datetime' type
 	to Postgres' 'datetime' type, and some MySQL output values match /0000-00-00 00:00:00/
 	and some values are real dates, such as 2005-04-15 09:34:00.
+
+If the top bit is set, another fiddle takes place, after any of the above have occurred:
+
+The timestamp is checked against 1970-01-01 00:00:00, and if they match, the timestamp
+is changed to 1970-01-01 00:00:01. This extra second means the timestamp is now valid
+under the strict option for MySQL V 5, whereas 1970-01-01 00:00:00 is invalid.
 
 This parameter is optional.
 
