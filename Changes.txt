@@ -1,5 +1,11 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.12  Mon Jul  7 10:21:00 2008
+	- Patch Build.PL and Makefile.PL to specify the required version of Perl, since the code inside
+	  module, 'require 5.005_62;', is not enough to stop the great CPAN testers using 5.005_05
+	- Reformat Build.PL and Makefile.PL slightly now that I'm using emacs
+	- Ship Configlog.ini
+
 1.11  Sun Aug 13 18:20:00 2006
 	- 'fiddle_timestamp' now takes one of these values: 0, 1 or 2, or any of those values + 128.
 		The 128 means the top (left-most) bit in the byte value of this parameter is set.

@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.11';
+our $VERSION = '1.12';
 
 my(%_decode_xml) =
 (
