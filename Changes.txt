@@ -1,5 +1,9 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.13  Wed Jul  9 09:59:00 2008
+	- Try again to specify a minimum version of Perl in Makefile.PL, by using different syntax.
+	  Thanx to David Golden for the suggestion
+
 1.12  Mon Jul  7 10:21:00 2008
 	- Patch Build.PL and Makefile.PL to specify the required version of Perl, since the code inside
 	  module, 'require 5.005_62;', is not enough to stop the great CPAN testers using 5.005_05

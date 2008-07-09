@@ -1,5 +1,7 @@
 use ExtUtils::MakeMaker;
 
+require 5.005_62;
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 
@@ -21,7 +23,6 @@ WriteMakefile
  },
  DISTNAME  => 'DBIx-Admin-BackupRestore',
  NAME      => 'DBIx::Admin::BackupRestore',
- PERL      => 5.005_62,
  PL_FILES  => {},
  PREREQ_PM =>
  {

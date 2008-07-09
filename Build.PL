@@ -4,6 +4,7 @@ Module::Build -> new
 (
  module_name    => 'DBIx::Admin::BackupRestore',
  license        => 'artistic',
+ dist_abstract  => 'Back-up all tables in a db to XML, and restore them',
  dist_author    => 'Ron Savage <ron@savage.net.au>',
  build_requires =>
  {
