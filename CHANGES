@@ -1,5 +1,18 @@
 Revision history for Perl extension DBIx::Admin::BackupRestore.
 
+1.16  Sun Feb 21 12:54:51 2010
+	- Remove text 'All rights reserved' (for Debian licensing).
+	- Remove POD heads 'Required Modules' and 'Changes'.
+	- Replace personal doc root with /var/www.
+	- Use namespace::autoclean with Moose.
+
+1.15  Wed Feb 10 14:01:40 2010
+	- Update MANIFEST.SKIP. Add MANIFEST and MYMETA.yml.
+
+1.14  Fri Nov 13 13:20:00 2009
+	- Run dos2unix
+	- Rename Changes.txt to CHANGES
+
 1.13  Wed Jul  9 09:59:00 2008
 	- Try again to specify a minimum version of Perl in Makefile.PL, by using different syntax.
 	  Thanx to David Golden for the suggestion

@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.13';
+our $VERSION = '1.16';
 
 my(%_decode_xml) =
 (
@@ -1088,28 +1088,6 @@ for that module.
 I have effectively extended his module to automatically handle all tables, and to handle
 importing too.
 
-=head1 Required Modules
-
-Install the 3 XML modules in this order.
-
-=over 4
-
-=item Carp
-
-=item File::Spec
-
-=item XML::Parser
-
-=item XML::TokeParser
-
-=item XML::Records
-
-=back
-
-=head1 Changes
-
-See Changes.txt.
-
 =head1 Author
 
 C<DBIx::Admin::BackupRestore> was written by Ron Savage I<E<lt>ron@savage.net.auE<gt>>
@@ -1119,8 +1097,7 @@ Home page: http://savage.net.au/index.html
 
 =head1 Copyright
 
-Australian copyright (c) 2004, Ron Savage. All rights reserved.
-
+Australian copyright (c) 2004, Ron Savage.
 	All Programs of mine are 'OSI Certified Open Source Software';
 	you can redistribute them and/or modify them under the terms of
 	The Artistic License, a copy of which is available at:

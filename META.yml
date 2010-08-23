@@ -1,25 +1,27 @@
 ---
-name: DBIx-Admin-BackupRestore
-version: 1.13
+abstract: 'Back-up all tables in a db to XML, and restore them'
 author:
   - 'Ron Savage <ron@savage.net.au>'
-abstract: 'Back-up all tables in a db to XML, and restore them'
+build_requires:
+  Test::More: 0
+configure_requires:
+  Module::Build: 0.36
+generated_by: 'Module::Build version 0.3603'
 license: artistic
-resources:
-  license: http://opensource.org/licenses/artistic-license.php
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: DBIx-Admin-BackupRestore
+provides:
+  DBIx::Admin::BackupRestore:
+    file: lib/DBIx/Admin/BackupRestore.pm
+    version: 1.16
 requires:
   Carp: 0
   XML::Parser: 0
   XML::Records: 0
   XML::TokeParser: 0
   perl: 5.005_62
-build_requires:
-  Test::More: 0
-provides:
-  DBIx::Admin::BackupRestore:
-    file: lib/DBIx/Admin/BackupRestore.pm
-    version: 1.13
-generated_by: Module::Build version 0.280801
-meta-spec:
-  url: http://module-build.sourceforge.net/META-spec-v1.2.html
-  version: 1.2
+resources:
+  license: http://opensource.org/licenses/artistic-license.php
+version: 1.16
