@@ -6,7 +6,7 @@ build_requires:
   Test::More: 0
 configure_requires:
   Module::Build: 0.36
-generated_by: 'Module::Build version 0.3603'
+generated_by: 'Module::Build version 0.3607'
 license: artistic
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -15,7 +15,7 @@ name: DBIx-Admin-BackupRestore
 provides:
   DBIx::Admin::BackupRestore:
     file: lib/DBIx/Admin/BackupRestore.pm
-    version: 1.16
+    version: 1.17
 requires:
   Carp: 0
   XML::Parser: 0
@@ -23,5 +23,5 @@ requires:
   XML::TokeParser: 0
   perl: 5.005_62
 resources:
-  license: http://opensource.org/licenses/artistic-license.php
-version: 1.16
+  license: http://www.perlfoundation.org/artistic_license_1_0
+version: 1.17

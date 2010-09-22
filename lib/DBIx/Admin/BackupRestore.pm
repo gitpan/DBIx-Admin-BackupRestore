@@ -54,7 +54,7 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 
 );
-our $VERSION = '1.16';
+our $VERSION = '1.17';
 
 my(%_decode_xml) =
 (
@@ -630,12 +630,14 @@ C<DBIx::Admin::BackupRestore> - Backup all tables in a database to XML, and rest
 
 C<DBIx::Admin::BackupRestore> is a pure Perl module.
 
-It exports all data - except nulls - in all tables from one database to one or more XML files.
+It exports all data - except nulls - in all tables from one database to one or more
+XML files.
 
-Actually, not all tables. Table names which match /^BIN\$.+\$./ are discarded. This is for Oracle.
+Actually, not all tables. Table names which match /^BIN\$.+\$./ are discarded.
+This is for Oracle.
 
-Then these files can be imported into another database, possibly under a different database
-server, using methods C<restore()> or C<restore_in_order()>.
+Then these files can be imported into another database, possibly under a different
+database server, using methods C<restore()> or C<restore_in_order()>.
 
 Note: Importing into Oracle does not handle sequences at all.
 
@@ -645,14 +647,16 @@ converted to underscores. This is A Really Good Idea.
 Also, the case of the output table and column names is governed by the database handle
 attribute FetchHashKeyName.
 
-Warning: This module is designed on the assumption you have a stand-alone script which creates
-an appropriate set of empty tables on the destination database server. You run that script,
-and then run this module in 'restore' mode.
+Warning: This module is designed on the assumption you have a stand-alone script which
+creates an appropriate set of empty tables on the destination database server.
+You run that script, and then run this module in 'restore' mode.
 
-Such a stand-alone script is trivial, by getting the output of method C<get_column_names()>
-and feeding it into the constructor of C<DBIx::Admin::CreateTrivialSchema>. Of course, you
-would only use this feature as a crude way of dumping the data into a database for
-quick inspection before processing the XML properly.
+Such a stand-alone script is trivial, by getting the output of method
+C<get_column_names()> and feeding it into the constructor of
+C<DBIx::Admin::CreateTrivialSchema>.
+
+Of course, you would only use this feature as a crude way of dumping the data into a
+database for quick inspection before processing the XML properly.
 
 This module is used daily to transfer a MySQL database under MS Windows to a Postgres
 database under GNU/Linux.
@@ -689,8 +693,8 @@ For each parameter you wish to use, call new as new(param_1 => value_1, ...).
 
 The default value is 0.
 
-If new is called as new(clean => 1), the backup phase deletes any characters outside the
-range 20 .. 7E (hex).
+If new is called as new(clean => 1), the backup phase deletes any characters outside
+the range 20 .. 7E (hex).
 
 The restore phase ignores this parameter.
 
@@ -720,7 +724,8 @@ file-to-file operation.
 
 =item dbi_catalog, dbi_schema, dbi_table, dbi_type
 
-These 4 parameters are passed to DBI's C<table_info()> method, to get a list of table names.
+These 4 parameters are passed to DBI's C<table_info()> method, to get a list of table
+names.
 
 The default values suit MySQL:
 
@@ -781,11 +786,11 @@ The 128 means the top (left-most) bit in the byte value of this parameter is set
 
 The default value is 1.
 
-If the value of this parameter is 0, then C<restore()> does not fiddle the value of fields
-whose names match /timestamp/.
+If the value of this parameter is 0, then C<restore()> does not fiddle the value of
+fields whose names match /timestamp/.
 
-If the value of the parameter is 1, then C<restore()> fiddles the value of fields whose names
-match /timestamp/ in this manner:
+If the value of the parameter is 1, then C<restore()> fiddles the value of fields
+whose names match /timestamp/ in this manner:
 
 	All values are assumed to be of the form /^YYYYMMDD/ (fake reg exps are nice!).
 	Hours, minutes and seconds, if present, are ignored.
@@ -797,8 +802,8 @@ match /timestamp/ in this manner:
 	You would use this option when transferring data from MySQL's 'timestamp' type
 	to Postgres' 'timestamp' type, and MySQL output values match /^(\d{8})/.
 
-If the value of the parameter is 2, then C<restore()> fiddles the value of fields whose names
-match /timestamp/ in this manner:
+If the value of the parameter is 2, then C<restore()> fiddles the value of fields
+whose names match /timestamp/ in this manner:
 
 	Timestamps undergo either 0 or 1 transformations.
 	If the value matches /^0000/, hours, minutes and seconds, if present, are ignored.
@@ -807,8 +812,8 @@ match /timestamp/ in this manner:
 	Eg: This - 0000-00-00 00:00:00 - is converted to 1970-01-01 00:00:00
 	and today - 2005-04-15 09:34:00 - is not converted.
 	You would use this option when transferring data from MySQL's 'datetime' type
-	to Postgres' 'datetime' type, and some MySQL output values match /0000-00-00 00:00:00/
-	and some values are real dates, such as 2005-04-15 09:34:00.
+	to Postgres' 'datetime' type, and some MySQL output values match
+	0000-00-00 00:00:00/ and some values are real dates, such as 2005-04-15 09:34:00.
 
 If the top bit is set, another fiddle takes place, after any of the above have occurred:
 
@@ -916,8 +921,8 @@ This parameter is optional.
 
 The default value is 0.
 
-If new is called as new(verbose => 1), the backup and restore phases both print the names
-of the tables to STDERR.
+If new is called as new(verbose => 1), the backup and restore phases both print the
+names of the tables to STDERR.
 
 When beginning to use this module, you are strongly encouraged to use the verbose option
 as a progress monitor.
@@ -947,7 +952,8 @@ column names, also converted according to FetchHashKeyName.
 
 Note: All spaces in table names are converted to underscores.
 
-Further, these column names are sorted, and all spaces in column names are converted to underscores.
+Further, these column names are sorted, and all spaces in column names are converted
+to underscores.
 
 This hashref is acceptable to the module DBIx::Admin::CreateTrivialSchema :-).
 
@@ -971,8 +977,8 @@ to output to disk files.
 
 Restores the tables in the order given in the array ref parameter.
 
-This allows you to define a column with a clause such as 'references foreign_table (foreign_column)',
-and to populate the foreign_table before the dependent table.
+This allows you to define a column with a clause such as 'references foreign_table
+(foreign_column)', and to populate the foreign_table before the dependent table.
 
 And no, mutually-dependent and self-referential tables are still not catered for.
 
@@ -1015,6 +1021,29 @@ There are 2 demo programs:
 =head1 FAQ
 
 =over 4
+
+=item Are there any known problems with this module?
+
+Yes, two so far.
+
+=over 4
+
+=item Columns containing newline characters
+
+The code ignores the column.
+
+If newline characters were encoded as the 2 characters '\n', say, then when reading
+the data back in, there would be the danger of that character sequence occurring
+naturally in the data, but not when it represented a newline character. Hence the
+program would wrongly decode '\n' as a newline in such cases.
+
+So, escaping any character is always problematic.
+
+=item Columns containing XML closing tags
+
+The XML parser fails to handle such cases. So don't do that.
+
+=back
 
 =item Why do I get 'duplicate key' errors after restoring?
 
@@ -1068,7 +1097,8 @@ Hence the error about 'duplicate key'.
 
 =head1 Related Modules
 
-On CPAN I can see 4 modules which obviously offer similar features - there may be others.
+On CPAN I can see 4 modules which obviously offer similar features - there may be
+others.
 
 =over 4
 
@@ -1082,11 +1112,11 @@ On CPAN I can see 4 modules which obviously offer similar features - there may b
 
 =back
 
-Of these, DBIx::XML_RDB is the only one I have experimented with. My thanks to Matt Sergeant
-for that module.
+Of these, DBIx::XML_RDB is the only one I have experimented with. My thanks to Matt
+Sergeant for that module.
 
-I have effectively extended his module to automatically handle all tables, and to handle
-importing too.
+I have effectively extended his module to automatically handle all tables, and to
+handle importing too.
 
 =head1 Author
 
